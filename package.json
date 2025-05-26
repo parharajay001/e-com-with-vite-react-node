@@ -1,0 +1,27 @@
+{
+  "name": "@workspace/root",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:frontend": "turbo run --filter frontend dev",
+    "dev:backend": "turbo run --filter backend dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "lint:frontend": "turbo run --filter frontend lint",
+    "lint:backend": "turbo run --filter backend lint",
+    "test": "turbo run test",
+    "test:frontend": "turbo run --filter frontend test",
+    "test:backend": "turbo run --filter backend test",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "eslint": "^9.20.0",
+    "prettier": "^3.5.0",
+    "turbo": "2.4.1",
+    "typescript": "^5.7.3"
+  },
+  "packageManager": "pnpm@6.32.4"
+}

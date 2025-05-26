@@ -1,0 +1,504 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum PaymentType {
+  CREDIT_CARD
+  DEBIT_CARD
+  PAYPAL
+  BANK_TRANSFER
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum UserRoleType {
+  USER
+  ADMIN
+  CUSTOMER
+  SELLER
+}
+
+enum BannerStatus {
+  ACTIVE
+  INACTIVE
+  SCHEDULED
+}
+
+enum BannerPosition {
+  HOME_TOP
+  HOME_MIDDLE
+  HOME_BOTTOM
+  CATEGORY_PAGE
+  PRODUCT_PAGE
+  CHECKOUT_PAGE
+}
+
+model ProductCategory {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String?
+  imageUrl    String?   @map("image_url")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  modifiedAt  DateTime  @updatedAt @map("modified_at")
+  deletedAt   DateTime? @map("deleted_at")
+  products    Product[]
+
+  @@index([name])
+  @@index([deletedAt])
+  @@map("product_category")
+}
+
+model Banner {
+  id          Int           @id @default(autoincrement())
+  title       String
+  content     String?
+  imageUrl    String        @map("image_url")
+  link        String?
+  position    BannerPosition @default(HOME_TOP)
+  status      BannerStatus  @default(ACTIVE)
+  startDate   DateTime?     @map("start_date")
+  endDate     DateTime?     @map("end_date")
+  priority    Int           @default(0)
+  clicks      Int           @default(0)
+  impressions Int           @default(0)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  modifiedAt  DateTime      @updatedAt @map("modified_at")
+  deletedAt   DateTime?     @map("deleted_at")
+
+  @@index([status, startDate, endDate])
+  @@index([position, priority])
+  @@index([deletedAt])
+  @@map("banner")
+}
+
+model ProductInventory {
+  id                Int       @id @default(autoincrement())
+  quantity          Int
+  lowStockThreshold Int       @default(10) @map("low_stock_threshold")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  modifiedAt        DateTime  @updatedAt @map("modified_at")
+  deletedAt         DateTime? @map("deleted_at")
+  products          Product[]
+
+  @@index([deletedAt])
+  @@map("product_inventory")
+}
+
+model Discount {
+  id              Int       @id @default(autoincrement())
+  name            String
+  description     String?
+  discountPercent Float     @map("discount_percent")
+  active          Boolean   @default(true)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  modifiedAt      DateTime  @updatedAt @map("modified_at")
+  deletedAt       DateTime? @map("deleted_at")
+  products        Product[]
+
+  @@index([active])
+  @@index([deletedAt])
+  @@map("discount")
+}
+
+model Product {
+  id              Int              @id @default(autoincrement())
+  name            String
+  description     String?
+  SKU             String           @unique
+  category        ProductCategory  @relation(fields: [categoryId], references: [id])
+  categoryId      Int              @map("category_id")
+  inventory       ProductInventory @relation(fields: [inventoryId], references: [id])
+  inventoryId     Int              @map("inventory_id")
+  price           Float
+  discount        Discount?        @relation(fields: [discountId], references: [id])
+  discountId      Int?             @map("discount_id")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  modifiedAt      DateTime         @updatedAt @map("modified_at")
+  deletedAt       DateTime?        @map("deleted_at")
+  version         Int              @default(1)
+  cartItems       CartItem[]
+  orderItems      OrderItems[]
+  productImage    ProductImage[]
+  variants        ProductVariant[]
+  wishlists       Wishlist[]       @relation("WishlistProducts")
+  brand           String?
+  weight          Float?
+  dimensions      Json?
+  tags            Json
+  tagsSearch      String?          @db.VarChar(255) /// @generated(value: json_unquote(json_extract(`tags`, '$[0]')))
+  averageRating   Float?           @default(0) @map("average_rating")
+  totalReviews    Int              @default(0) @map("total_reviews")
+  metaTitle       String?          @map("meta_title")
+  metaDescription String?          @map("meta_description")
+  metaKeywords    String?          @map("meta_keywords")
+  isPublished     Boolean          @default(false) @map("is_published")
+  reviews         ProductReview[]
+  sellerProducts  SellerProduct[]
+
+  @@index([categoryId, inventoryId, discountId])
+  @@index([SKU])
+  @@index([deletedAt])
+  @@index([tagsSearch], map: "product_tags_idx")
+  @@fulltext([name, description])
+  @@map("product")
+}
+
+model ProductVariant {
+  id         Int      @id @default(autoincrement())
+  product    Product  @relation(fields: [productId], references: [id])
+  productId  Int      @map("product_id")
+  sku        String   @unique
+  options    Json
+  price      Float?
+  createdAt  DateTime @default(now()) @map("created_at")
+  modifiedAt DateTime @updatedAt @map("modified_at")
+
+  @@map("product_variant")
+}
+
+model ProductImage {
+  id        Int       @id @default(autoincrement())
+  product   Product   @relation(fields: [productId], references: [id])
+  productId Int       @map("product_id")
+  imageUrl  String    @map("image_url")
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@unique([productId, imageUrl])
+  @@map("product_image")
+}
+
+model ProductReview {
+  id         Int      @id @default(autoincrement())
+  product    Product  @relation(fields: [productId], references: [id])
+  productId  Int      @map("product_id")
+  user       User     @relation(fields: [userId], references: [id])
+  userId     Int      @map("user_id")
+  rating     Int
+  title      String?
+  review     String
+  isVerified Boolean  @default(false) @map("is_verified")
+  helpful    Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  modifiedAt DateTime @updatedAt @map("modified_at")
+
+  @@index([productId, rating])
+  @@index([userId])
+  @@map("product_review")
+}
+
+model User {
+  id                      Int               @id @default(autoincrement())
+  email                   String            @unique
+  password                String
+  firstName               String            @map("first_name")
+  lastName                String?           @map("last_name")
+  telephone               String?
+  isVerified              Boolean           @default(false) @map("is_verified")
+  otp                     String?
+  otpExpiry               DateTime?         @map("otp_expiry")
+  profilePicture          String?           @map("profile_picture")
+  createdAt               DateTime          @default(now()) @map("created_at")
+  modifiedAt              DateTime          @updatedAt @map("modified_at")
+  deletedAt               DateTime?         @map("deleted_at")
+  lastLogin               DateTime?         @map("last_login")
+  failedLoginAttempts     Int               @default(0) @map("failed_login_attempts")
+  accountLocked           Boolean           @default(false) @map("account_locked")
+  addresses               UserAddress[]
+  payments                UserPayment[]
+  shoppingSessions        ShoppingSession[]
+  orders                  OrderDetails[]
+  roles                   UserRole[]
+  wishlists               Wishlist[]
+  reviews                 ProductReview[]
+  seller                  Seller?
+  notificationPreferences Json?             @map("notification_preferences")
+
+  @@index([email, isVerified])
+  @@index([deletedAt])
+  @@map("user")
+}
+
+model Role {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  description String?
+  createdAt   DateTime   @default(now()) @map("created_at")
+  modifiedAt  DateTime   @updatedAt @map("modified_at")
+  deletedAt   DateTime?  @map("deleted_at")
+  users       UserRole[]
+
+  @@index([name])
+  @@map("role")
+}
+
+model UserRole {
+  id     Int  @id @default(autoincrement())
+  user   User @relation(fields: [userId], references: [id])
+  userId Int  @map("user_id")
+  role   Role @relation(fields: [roleId], references: [id])
+  roleId Int  @map("role_id")
+
+  @@unique([userId, roleId])
+  @@index([userId, roleId])
+  @@map("user_role")
+}
+
+model UserAddress {
+  id           Int       @id @default(autoincrement())
+  user         User      @relation(fields: [userId], references: [id])
+  userId       Int       @map("user_id")
+  addressLine1 String    @map("address_line1")
+  addressLine2 String?   @map("address_line2")
+  city         String
+  postalCode   String    @map("postal_code")
+  country      String
+  telephone    String?
+  mobile       String?
+  addressType  String    @default("SHIPPING") @map("address_type")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  modifiedAt   DateTime  @updatedAt @map("modified_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  @@index([userId, country])
+  @@map("user_address")
+}
+
+model UserPayment {
+  id           Int            @id @default(autoincrement())
+  user         User           @relation(fields: [userId], references: [id])
+  userId       Int            @map("user_id")
+  paymentType  PaymentType    @map("payment_type")
+  provider     String
+  accountNo    String         @map("account_no")
+  expiryMonth  Int            @map("expiry_month")
+  expiryYear   Int            @map("expiry_year")
+  isPrimary    Boolean        @default(false) @map("is_primary")
+  verified     Boolean        @default(false)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  modifiedAt   DateTime       @updatedAt @map("modified_at")
+  deletedAt    DateTime?      @map("deleted_at")
+  OrderDetails OrderDetails[]
+
+  @@index([userId, paymentType])
+  @@map("user_payment")
+}
+
+model ShoppingSession {
+  id         Int        @id @default(autoincrement())
+  user       User       @relation(fields: [userId], references: [id])
+  userId     Int        @map("user_id")
+  currency   String     @default("USD") @db.VarChar(3)
+  createdAt  DateTime   @default(now()) @map("created_at")
+  modifiedAt DateTime   @updatedAt @map("modified_at")
+  cartItems  CartItem[]
+
+  @@index([userId])
+  @@map("shopping_session")
+}
+
+model CartItem {
+  id         Int             @id @default(autoincrement())
+  session    ShoppingSession @relation(fields: [sessionId], references: [id])
+  sessionId  Int             @map("session_id")
+  product    Product         @relation(fields: [productId], references: [id])
+  productId  Int             @map("product_id")
+  quantity   Int
+  createdAt  DateTime        @default(now()) @map("created_at")
+  modifiedAt DateTime        @updatedAt @map("modified_at")
+
+  @@index([sessionId, productId])
+  @@map("cart_item")
+}
+
+model OrderDetails {
+  id                Int             @id @default(autoincrement())
+  user              User            @relation(fields: [userId], references: [id])
+  userId            Int             @map("user_id")
+  total             Float
+  payment           UserPayment?    @relation(fields: [paymentId], references: [id])
+  paymentId         Int?            @map("payment_id")
+  status            OrderStatus     @default(PENDING)
+  shippingCost      Float?          @map("shipping_cost")
+  trackingNumber    String?         @map("tracking_number")
+  estimatedDelivery DateTime?       @map("estimated_delivery")
+  currency          String          @default("USD") @db.VarChar(3)
+  createdAt         DateTime        @default(now()) @map("created_at")
+  modifiedAt        DateTime        @updatedAt @map("modified_at")
+  version           Int             @default(1)
+  orderItems        OrderItems[]
+  paymentDetails    PaymentDetails?
+  coupon            Coupon?         @relation(fields: [couponId], references: [id])
+  couponId          Int?            @map("coupon_id")
+  subtotal          Float
+  taxAmount         Float           @map("tax_amount")
+  shippingAddress   Json            @map("shipping_address")
+  billingAddress    Json            @map("billing_address")
+  notes             String?
+
+  @@index([userId, status])
+  @@index([trackingNumber])
+  @@map("order_details")
+}
+
+model OrderItems {
+  id              Int          @id @default(autoincrement())
+  order           OrderDetails @relation(fields: [orderId], references: [id])
+  orderId         Int          @map("order_id")
+  product         Product      @relation(fields: [productId], references: [id])
+  productId       Int          @map("product_id")
+  quantity        Int
+  priceAtPurchase Float        @map("price_at_purchase")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  modifiedAt      DateTime     @updatedAt @map("modified_at")
+
+  @@index([orderId, productId])
+  @@map("order_items")
+}
+
+model PaymentDetails {
+  id            Int           @id @default(autoincrement())
+  order         OrderDetails  @relation(fields: [orderId], references: [id])
+  orderId       Int           @unique @map("order_id")
+  amount        Float
+  provider      String
+  status        PaymentStatus @default(PENDING)
+  transactionId String?       @unique @map("transaction_id")
+  currency      String        @default("USD") @db.VarChar(3)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  modifiedAt    DateTime      @updatedAt @map("modified_at")
+
+  @@index([orderId, status])
+  @@map("payment_details")
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  entityId   Int      @map("entity_id")
+  entityType String   @map("entity_type")
+  action     String
+  oldValue   Json?
+  newValue   Json?
+  userId     Int?     @map("user_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([entityId, entityType])
+  @@map("audit_log")
+}
+
+model Tax {
+  id         Int      @id @default(autoincrement())
+  country    String
+  state      String?
+  rate       Float
+  createdAt  DateTime @default(now()) @map("created_at")
+  modifiedAt DateTime @updatedAt @map("modified_at")
+
+  @@unique([country, state])
+  @@map("tax")
+}
+
+model Wishlist {
+  id         Int       @id @default(autoincrement())
+  user       User      @relation(fields: [userId], references: [id])
+  userId     Int       @map("user_id")
+  products   Product[] @relation("WishlistProducts")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  modifiedAt DateTime  @updatedAt @map("modified_at")
+
+  @@index([userId])
+  @@map("wishlist")
+}
+
+model Seller {
+  id             Int             @id @default(autoincrement())
+  user           User            @relation(fields: [userId], references: [id])
+  userId         Int             @unique @map("user_id")
+  businessName   String          @map("business_name")
+  description    String?
+  logo           String?
+  website        String?
+  taxId          String?         @map("tax_id")
+  status         String          @default("PENDING")
+  rating         Float?          @default(0)
+  totalSales     Int             @default(0) @map("total_sales")
+  commissionRate Float           @default(0) @map("commission_rate")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  modifiedAt     DateTime        @updatedAt @map("modified_at")
+  deletedAt      DateTime?       @map("deleted_at")
+  products       SellerProduct[]
+  payouts        SellerPayout[]
+
+  @@index([status])
+  @@map("seller")
+}
+
+model SellerProduct {
+  id        Int     @id @default(autoincrement())
+  seller    Seller  @relation(fields: [sellerId], references: [id])
+  sellerId  Int     @map("seller_id")
+  product   Product @relation(fields: [productId], references: [id])
+  productId Int     @map("product_id")
+  price     Float
+  quantity  Int
+  status    String  @default("ACTIVE")
+
+  @@unique([sellerId, productId])
+  @@index([sellerId, status])
+  @@index([productId])
+  @@map("seller_product")
+}
+
+model SellerPayout {
+  id         Int       @id @default(autoincrement())
+  seller     Seller    @relation(fields: [sellerId], references: [id])
+  sellerId   Int       @map("seller_id")
+  amount     Float
+  status     String
+  paidAt     DateTime? @map("paid_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  modifiedAt DateTime  @updatedAt @map("modified_at")
+
+  @@index([sellerId, status])
+  @@map("seller_payout")
+}
+
+model Coupon {
+  id            Int            @id @default(autoincrement())
+  code          String         @unique
+  description   String?
+  discountType  String         @map("discount_type")
+  discountValue Float          @map("discount_value")
+  minPurchase   Float?         @map("min_purchase")
+  maxDiscount   Float?         @map("max_discount")
+  startDate     DateTime       @map("start_date")
+  endDate       DateTime       @map("end_date")
+  usageLimit    Int?           @map("usage_limit")
+  usageCount    Int            @default(0) @map("usage_count")
+  isActive      Boolean        @default(true) @map("is_active")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  modifiedAt    DateTime       @updatedAt @map("modified_at")
+  orders        OrderDetails[]
+
+  @@index([code, isActive])
+  @@map("coupon")
+}
